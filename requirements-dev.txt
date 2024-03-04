@@ -263,7 +263,7 @@ types-ujson==5.9.0.0      # via -c constraints.txt, types-all
 types-waitress==2.1.4.20240106  # via -c constraints.txt, types-all
 types-werkzeug==1.0.9     # via -c constraints.txt, types-all, types-flask
 types-xxhash==3.0.5.2     # via -c constraints.txt, types-all
-typing-extensions==4.5.0  # via -c constraints.txt, black, faker, gt4py (pyproject.toml), ipython, mypy, pytest-factoryboy, setuptools-scm
+typing-extensions>4.5.0   # via -c constraints.txt, black, faker, gt4py (pyproject.toml), ipython, mypy, pytest-factoryboy, setuptools-scm
 urllib3==2.2.1            # via -c constraints.txt, requests, types-requests
 virtualenv==20.25.1       # via -c constraints.txt, pre-commit, tox
 wcwidth==0.2.13           # via -c constraints.txt, prompt-toolkit

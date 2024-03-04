@@ -263,7 +263,7 @@ types-ujson==5.9.0.0      # via types-all
 types-waitress==2.1.4.20240106  # via types-all
 types-werkzeug==1.0.9     # via types-all, types-flask
 types-xxhash==3.0.5.2     # via types-all
-typing-extensions==4.5.0  # via black, faker, gt4py (pyproject.toml), ipython, mypy, pytest-factoryboy, setuptools-scm
+typing-extensions>4.5.0   # via black, faker, gt4py (pyproject.toml), ipython, mypy, pytest-factoryboy, setuptools-scm
 urllib3==2.2.1            # via requests, types-requests
 virtualenv==20.25.1       # via pre-commit, tox
 wcwidth==0.2.13           # via prompt-toolkit
