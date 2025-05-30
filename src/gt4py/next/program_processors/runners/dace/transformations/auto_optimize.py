@@ -268,7 +268,6 @@ def _gt_auto_process_top_level_maps(
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
-        import pdb; pdb.set_trace()
         cleanup_stages = [
             gtx_transformations.SplitAccessNode(
                 single_use_data=single_use_data,
@@ -296,7 +295,6 @@ def _gt_auto_process_top_level_maps(
         # Call vertical and horizontal map fusion to fuse together maps on partially
         #  overlapping range. This is an iterative process that splits the maps to
         #  expose overlapping range and applies serial/parallel map fusion.\
-        import pdb; pdb.set_trace()
         gtx_transformations.gt_vertical_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
@@ -305,7 +303,6 @@ def _gt_auto_process_top_level_maps(
             validate=validate,
             validate_all=validate_all,
         )
-        import pdb; pdb.set_trace()
         gtx_transformations.gt_horizontal_map_fusion(
             sdfg=sdfg,
             run_simplify=False,

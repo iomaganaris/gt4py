@@ -248,9 +248,6 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         if len(possible_producers) == 0:
             return None
         elif len(possible_producers) != 1:
-            sdfg = state.sdfg
-            import pdb; pdb.set_trace()  # noqa: T201
-            sdfg.view()
             raise ValueError(
                 f"Found an invalid SDFG, there are multiple producer for '{self.access_node.data}"
             )
