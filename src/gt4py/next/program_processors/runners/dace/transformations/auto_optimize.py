@@ -268,6 +268,7 @@ def _gt_auto_process_top_level_maps(
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
+        import pdb; pdb.set_trace()
         cleanup_stages = [
             gtx_transformations.SplitAccessNode(
                 single_use_data=single_use_data,
@@ -276,12 +277,12 @@ def _gt_auto_process_top_level_maps(
                 assume_pointwise=assume_pointwise,
             ),
             # TODO(phimuell): Add a criteria to decide if we should promote or not.
-            gtx_transformations.SerialMapPromoter(
-                only_toplevel_maps=True,
-                promote_vertical=True,
-                promote_horizontal=False,
-                promote_local=False,
-            ),
+            # gtx_transformations.SerialMapPromoter(
+            #     only_toplevel_maps=True,
+            #     promote_vertical=False,
+            #     promote_horizontal=False,
+            #     promote_local=False,
+            # ),
         ]
 
         # Perform the clean up.
@@ -294,7 +295,8 @@ def _gt_auto_process_top_level_maps(
 
         # Call vertical and horizontal map fusion to fuse together maps on partially
         #  overlapping range. This is an iterative process that splits the maps to
-        #  expose overlapping range and applies serial/parallel map fusion.
+        #  expose overlapping range and applies serial/parallel map fusion.\
+        import pdb; pdb.set_trace()
         gtx_transformations.gt_vertical_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
@@ -303,6 +305,7 @@ def _gt_auto_process_top_level_maps(
             validate=validate,
             validate_all=validate_all,
         )
+        import pdb; pdb.set_trace()
         gtx_transformations.gt_horizontal_map_fusion(
             sdfg=sdfg,
             run_simplify=False,

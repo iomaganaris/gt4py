@@ -109,7 +109,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
         # The intermediate access node must be a single use data, because we will
         #  get rid of it, and it must be a transient and a non-view element.
-        if access_node.data not in self._single_use_data[sdfg]:
+        if sdfg not in self._single_use_data or access_node.data not in self._single_use_data[sdfg]:
             return False
         if not desc.transient:
             return False
@@ -198,7 +198,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
         # Now match the outgoing edges to their incoming producers.
         for oedge in state.out_edges(access_node):
-            possible_producer = self._find_producer(oedge, assignment.keys())
+            possible_producer = self._find_producer(state, oedge, assignment.keys())
             if possible_producer is None:
                 return None
             assignment[possible_producer].add(oedge)
@@ -212,6 +212,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
     def _find_producer(
         self,
+        state,
         consumer_edge: dace_graph.MultiConnectorEdge,
         producer_edges: Iterable[dace_graph.MultiConnectorEdge],
     ) -> dace_graph.MultiConnectorEdge | None:
@@ -247,6 +248,9 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         if len(possible_producers) == 0:
             return None
         elif len(possible_producers) != 1:
+            sdfg = state.sdfg
+            import pdb; pdb.set_trace()  # noqa: T201
+            sdfg.view()
             raise ValueError(
                 f"Found an invalid SDFG, there are multiple producer for '{self.access_node.data}"
             )
