@@ -117,33 +117,34 @@ class GTFNTranslationStep(
 
         for name, connectivity_type in offset_provider_type.items():
             if isinstance(connectivity_type, common.NeighborConnectivityType):
-                if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
-                    raise ValueError(
-                        "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
+                if name in ["E2C2V", "E2ECV"]:
+                    if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
+                        raise ValueError(
+                            "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
+                        )
+
+                    # parameter
+                    parameters.append(
+                        interface.Parameter(
+                            name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
+                            type_=ts.FieldType(
+                                dims=list(connectivity_type.domain),
+                                dtype=type_translation.from_dtype(connectivity_type.dtype),
+                            ),
+                        )
                     )
 
-                # parameter
-                parameters.append(
-                    interface.Parameter(
-                        name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
-                        type_=ts.FieldType(
-                            dims=list(connectivity_type.domain),
-                            dtype=type_translation.from_dtype(connectivity_type.dtype),
-                        ),
+                    # connectivity argument expression
+                    nbtbl = (
+                        f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
+                        f"generated::{connectivity_type.domain[0].value}_t, "
+                        f"generated::{connectivity_type.domain[1].value}_t, "
+                        f"{connectivity_type.max_neighbors}"
+                        f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
                     )
-                )
-
-                # connectivity argument expression
-                nbtbl = (
-                    f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{connectivity_type.domain[0].value}_t, "
-                    f"generated::{connectivity_type.domain[1].value}_t, "
-                    f"{connectivity_type.max_neighbors}"
-                    f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
-                )
-                arg_exprs.append(
-                    f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
-                )
+                    arg_exprs.append(
+                        f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
+                    )
             elif isinstance(connectivity_type, common.Dimension):
                 pass
             else:
