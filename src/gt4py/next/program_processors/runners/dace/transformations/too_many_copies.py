@@ -124,11 +124,48 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         second_node_in_edges = graph.in_edges(second_node)
         second_node_out_edges = graph.out_edges(second_node)
 
+        first_node_shape = first_desc.shape
+        second_node_shape = second_desc.shape
+        second_node_offset = tuple(0 for _ in range(len(second_node_shape)))
+        third_node_shape = third_desc.shape
+        third_node_offset = tuple(0 for _ in range(len(third_node_shape)))
+
+        if second_node_shape != first_node_shape:
+            second_node_offset = tuple(f - s for f, s in zip(first_node_shape, second_node_shape))
+        if third_node_shape != first_node_shape:
+            third_node_offset = tuple(f - s for f, s in zip(first_node_shape, third_node_shape))
+
         for edge in graph.edges():
             if edge.data.data == second_node.data:
                 edge.data.data = first_node.data
+                if edge.data.dst_subset != tuple([0]):
+                    for i, offset in enumerate(second_node_offset):
+                        new_subset = []
+                        if edge.data.dst_subset is not None:
+                            for j in range(len(edge.data.dst_subset[i])-1):
+                                new_subset.append(edge.data.dst_subset[i][j] + offset)
+                            new_subset.append(edge.data.dst_subset[i][-1])
+                            edge.data.dst_subset[i] = tuple(new_subset)
+                        else:
+                            for j in range(len(edge.data.src_subset[i])-1):
+                                new_subset.append(edge.data.src_subset[i][j] + offset)
+                            new_subset.append(edge.data.src_subset[i][-1])
+                            edge.data.src_subset[i] = tuple(new_subset)
             if edge.data.data == third_node.data:
                 edge.data.data = first_node.data
+                if edge.data.dst_subset != tuple([0]):
+                    for i, offset in enumerate(third_node_offset):
+                        new_subset = []
+                        if edge.data.dst_subset is not None:
+                            for j in range(len(edge.data.dst_subset[i])-1):
+                                new_subset.append(edge.data.dst_subset[i][j] + offset)
+                            new_subset.append(edge.data.dst_subset[i][-1])
+                            edge.data.dst_subset[i] = tuple(new_subset)
+                        else:
+                            for j in range(len(edge.data.src_subset[i])-1):
+                                new_subset.append(edge.data.src_subset[i][j] + offset)
+                            new_subset.append(edge.data.src_subset[i][-1])
+                            edge.data.src_subset[i] = tuple(new_subset)
 
         second_node.data = first_node.data
         third_node.data = first_node.data
