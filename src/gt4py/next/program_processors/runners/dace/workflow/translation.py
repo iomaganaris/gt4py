@@ -259,20 +259,14 @@ class DaCeTranslator(
             gtx_transformations.gt_simplify(sdfg)
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
-        async_sdfg_call = self.async_sdfg_call
+        async_sdfg_call = False
         if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:
             # We measure the execution time of one program by instrumenting the
             #   top-level SDFG with a cpp timer (std::chrono). This timer measures
             #   only the computation time, it does not include the overhead of
             #   calling the SDFG from Python.
-            collect_gpu_tx_markers = (
-                config.COLLECT_METRICS_LEVEL == metrics.GPU_TX_MARKERS and _has_gpu_schedule(sdfg)
-            )
-            sdfg.instrument = (
-                dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-                if collect_gpu_tx_markers
-                else dace.dtypes.InstrumentationType.Timer
-            )
+            collect_gpu_tx_markers = config.COLLECT_METRICS_LEVEL == metrics.GPU_TX_MARKERS and _has_gpu_schedule(sdfg)
+            sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS if collect_gpu_tx_markers else dace.dtypes.InstrumentationType.Timer
             if collect_gpu_tx_markers:
                 for node in sdfg.all_nodes_recursive():
                     if isinstance(node, dace.sdfg.SDFGState):
@@ -281,9 +275,9 @@ class DaCeTranslator(
                         node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
                     elif isinstance(node, dace.nodes.EntryNode):
                         node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-            else:
-                # we need to make a synchronous SDFG call when using the CPU timers for profiling
-                async_sdfg_call = False
+
+        elif self.async_sdfg_call:
+            async_sdfg_call = True
 
         if async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)
