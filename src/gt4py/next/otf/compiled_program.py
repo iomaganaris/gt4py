@@ -14,6 +14,8 @@ import functools
 import itertools
 from typing import Any, Callable, Sequence, TypeAlias, TypeVar
 
+import nvtx
+
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
@@ -22,6 +24,10 @@ from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
+
+# nvtx traces
+MODULE_COLOR = "orange"
+GT4PY_LABEL = "gt4py"
 
 T = TypeVar("T")
 
@@ -217,6 +223,7 @@ class CompiledProgramsPool:
         assert not self.program_type.definition.pos_only_args
         self._validate_argument_descriptor_mapping()
 
+    @nvtx.annotate(color=MODULE_COLOR, category=GT4PY_LABEL, message="program_call")
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
     ) -> None:
@@ -232,6 +239,9 @@ class CompiledProgramsPool:
         # TODO(tehrengruber): Dispatching over offset provider type is wrong, especially when we
         #  use compile time domains.
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
+        rng = nvtx.start_range(
+            color=MODULE_COLOR, category=GT4PY_LABEL, message="call_compiled_program"
+        )
         try:
             self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
         except TypeError:  # 'Future' object is not callable
@@ -251,6 +261,8 @@ class CompiledProgramsPool:
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
+        finally:
+            nvtx.end_range(rng)
 
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(self) -> Callable:

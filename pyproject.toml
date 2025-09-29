@@ -105,6 +105,7 @@ dependencies = [
   'nanobind>=1.9.0',
   'ninja>=1.11',
   'numpy>=1.26.4',
+  'nvtx==0.2.11',
   'packaging>=20.0',
   'pybind11>=2.10.1',
   'setuptools>=77.0.3',
