@@ -370,6 +370,11 @@ def _gt_auto_process_top_level_maps(
             validate=False,
             validate_all=validate_all,
         )
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.RemoveAccessNodeCopies(single_use_data=single_use_data),
+            validate=False,
+            validate_all=validate_all,
+        )
 
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
