@@ -24,7 +24,6 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 
 def gt_remove_copy_chain(
     sdfg: dace.SDFG,
-    direction: Literal["read", "write"],
     validate: bool = True,
     validate_all: bool = False,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
@@ -36,8 +35,6 @@ def gt_remove_copy_chain(
 
     Args:
         sdfg: The SDFG to process.
-        direction: One of "read" or "write". When "read", try to remove a transient
-            node which is fully read; otherwise a transient which is fully written.
         validate: Perform validation after the pass has run.
         validate_all: Perform extensive validation.
         single_use_data: Which data descriptors are used only once.
@@ -55,7 +52,7 @@ def gt_remove_copy_chain(
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
     result: int = sdfg.apply_transformations_repeated(
-        CopyChainRemover(direction=direction, single_use_data=single_use_data),
+        CopyChainRemover(single_use_data=single_use_data),
         validate=validate,
         validate_all=validate_all,
     )
@@ -125,8 +122,6 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     node_a1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
     node_a2 = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
-    _direction: str
-
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
@@ -135,14 +130,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     def __init__(
         self,
         *args: Any,
-        direction: Literal["read", "write"],
         single_use_data: dict[dace.SDFG, set[str]],
         **kwargs: Any,
     ) -> None:
-        if direction not in {"read", "write"}:
-            raise ValueError("Direction must be either 'read' or 'write'.")
         super().__init__(*args, **kwargs)
-        self._direction = direction
         self._single_use_data = single_use_data
 
     @classmethod
