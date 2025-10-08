@@ -31,7 +31,7 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
     """
     sdfg = dace.SDFG(util.unique_name("simple_linear_chain_sdfg"))
 
-    for name in ["a", "b", "c", "d", "e", "f"]:
+    for name in ["a", "b", "c", "d", "e"]:
         sdfg.add_array(
             name,
             shape=(10,),
@@ -39,7 +39,7 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
             transient=True,
         )
     sdfg.arrays["a"].transient = False
-    sdfg.arrays["f"].transient = False
+    sdfg.arrays["e"].transient = False
 
     state = sdfg.add_state(is_start_block=True)
     b, c, d, e = (state.add_access(name) for name in "bcde")
@@ -56,15 +56,6 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
     state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10]"))
     state.add_nedge(c, d, dace.Memlet("c[0:10] -> [0:10]"))
     state.add_nedge(d, e, dace.Memlet("d[0:10] -> [0:10]"))
-    state.add_mapped_tasklet(
-        "comp2",
-        map_ranges={"__i": "0:10"},
-        inputs={"__in": dace.Memlet("e[__i]")},
-        input_nodes={e},
-        code="__out = __in",
-        outputs={"__out": dace.Memlet("f[__i]")},
-        external_edges=True,
-    )
     sdfg.validate()
     return sdfg
 
@@ -508,26 +499,23 @@ def _make_copy_chain_with_reduction_node(
     return sdfg, state, red0, accumulators[0], red1, accumulators[1], output_ac
 
 
-@pytest.mark.parametrize("direction", ["read", "write"])
-def test_simple_linear_chain(direction):
+def test_simple_linear_chain():
     sdfg = _make_simple_linear_chain_sdfg()
 
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, direction, validate_all=True)
-    assert nb_applies == 3
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
     )
-    assert len(acnodes) == 3
-    transient_data = [ac.data for ac in acnodes if ac.desc(sdfg).transient]
-    assert len(transient_data) == 1
-    assert transient_data[0] == ("e" if direction == "read" else "b")
+    assert len(acnodes) == 2
+    assert not any(ac.desc(sdfg).transient for ac in acnodes)
+    assert nb_applies == 3
 
 
 def test_diff_size_linear_pull_chain():
     sdfg, state, output, tasklet = _make_diff_sizes_pull_chain_sdfg()
 
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "read", validate_all=True)
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
@@ -591,7 +579,7 @@ def test_multi_stage_reduction():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     # Apply the transformation.
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "read", validate_all=True)
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     # Run the processed SDFG
     util.compile_and_run_sdfg(sdfg, **res)
@@ -625,7 +613,7 @@ def test_not_fully_copied():
     # Apply the transformation.
     #  It will only remove `d` all the others are retained, because they are not read
     #  correctly, i.e. fully.
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "read", validate_all=True)
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     # Perform all the checks.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
@@ -678,7 +666,7 @@ def test_a1_additional_output():
 
     # Apply the transformation.
     #  The transformation removes `a1` and `a2`.
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "read", validate_all=True)
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     # Perform the tests.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
@@ -728,7 +716,7 @@ def test_linear_chain_with_nested_sdfg():
 
     # Apply the transformation.
     #  It should remove all non transient arrays.
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "read", validate_all=True)
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     # Perform the tests.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
@@ -763,7 +751,6 @@ def test_copy_chain_remover_with_reduction(output_an_array: bool):
             gtx_transformations.CopyChainRemover.node_a2: a2,
         }
         copy_chain_remover = gtx_transformations.CopyChainRemover(
-            direction="read",
             single_use_data={sdfg: {acc0.data, acc1.data}},
         )
         copy_chain_remover.setup_match(
