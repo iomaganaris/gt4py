@@ -69,7 +69,7 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
     return sdfg
 
 
-def _make_diff_sizes_read_chain_sdfg() -> tuple[
+def _make_diff_sizes_pull_chain_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet
 ]:
     """Creates a linear chain of copies.
@@ -84,7 +84,7 @@ def _make_diff_sizes_read_chain_sdfg() -> tuple[
     - The AccessNode that is used as final output, refers to `e`.
     - The Tasklet that is within the Map.
     """
-    sdfg = dace.SDFG(util.unique_name("diff_size_linear_read_chain_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("diff_size_linear_pull_chain_sdfg"))
 
     array_size_increment = 10
     array_size = 10
@@ -119,15 +119,15 @@ def _make_diff_sizes_read_chain_sdfg() -> tuple[
     return sdfg, state, e, tasklet
 
 
-def _make_diff_sizes_write_chain_sdfg() -> tuple[
+def _make_diff_sizes_push_chain_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet
 ]:
     """Creates a linear chain of copies.
 
-    Same as `_make_simple_linear_read_chain_sdfg()` but the intermediates become
+    Same as `_make_simple_linear_pull_chain_sdfg()` but the intermediates become
     smaller and smaller, so the full shape of the destination array is always written.
     """
-    sdfg = dace.SDFG(util.unique_name("diff_size_linear_write_chain_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("diff_size_linear_push_chain_sdfg"))
 
     array_size_decrement = 10
     array_size = 50
@@ -524,8 +524,8 @@ def test_simple_linear_chain(direction):
     assert transient_data[0] == ("e" if direction == "read" else "b")
 
 
-def test_diff_size_linear_read_chain():
-    sdfg, state, output, tasklet = _make_diff_sizes_read_chain_sdfg()
+def test_diff_size_linear_pull_chain():
+    sdfg, state, output, tasklet = _make_diff_sizes_pull_chain_sdfg()
 
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "read", validate_all=True)
 
@@ -549,10 +549,10 @@ def test_diff_size_linear_read_chain():
     assert str(tasklet_memlet.subset[0][0] - 18).strip() == "__i"
 
 
-def test_diff_size_linear_write_chain():
-    sdfg, state, input, tasklet = _make_diff_sizes_write_chain_sdfg()
+def test_diff_size_linear_push_chain():
+    sdfg, state, input, tasklet = _make_diff_sizes_push_chain_sdfg()
 
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "write", validate_all=True)
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
@@ -647,17 +647,18 @@ def test_possible_cyclic_sdfg():
     sdfg = _make_possible_cyclic_sdfg()
 
     # Apply the transformation.
-    #  It will not remove `a1`, because it it would and replace it with `a2` then
-    #  the resulting SDFG is cyclic. It will, however, replace `a2` with `o1`.
-    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, "read", validate_all=True)
+    #  The first iteration will replace `a2` with `o1`, in pull mode, since the
+    #  full shape of `a2` is copied into `o1`. In a second iteration, the transformation
+    #  will be applied in push mode: the full shape of the global `i1` is copied
+    #  into `a1`, thus `a1` will be replaced with `i1`.
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    assert nb_applies == 2
 
     # Perform all the checks.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
     )
-    assert len(acnodes) == 3
-    assert nb_applies == 1
-    assert "o1" not in acnodes
+    assert {node.data for node in acnodes} == {"i1", "o1"}
 
 
 def test_a1_additional_output():
