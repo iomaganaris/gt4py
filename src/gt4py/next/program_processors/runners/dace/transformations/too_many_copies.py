@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import copy
 from typing import Any, Optional
 
 import dace
@@ -16,13 +15,7 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import nodes as dace_nodes
-from dace.transformation import helpers
 
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-from gt4py.next.program_processors.runners.dace.transformations import (
-    map_fusion_utils as gtx_mfutils,
-    splitting_tools as gtx_dace_split,
-)
 
 @dace_properties.make_properties
 class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
@@ -56,7 +49,11 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
 
     @classmethod
     def expressions(cls) -> Any:
-        return [dace.sdfg.utils.node_path_graph(cls.first_node, cls.second_node, cls.third_node, cls.fourth_node)]
+        return [
+            dace.sdfg.utils.node_path_graph(
+                cls.first_node, cls.second_node, cls.third_node, cls.fourth_node
+            )
+        ]
 
     def can_be_applied(
         self,
@@ -74,15 +71,30 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         fourth_node: dace_nodes.AccessNode = self.fourth_node
         fourth_desc: dace_data.Data = fourth_node.desc(sdfg)
 
-        scope = graph.scope_dict()
+        # scope = graph.scope_dict()
 
-        if first_desc.transient is False and second_desc.transient is True and third_desc.transient is True and fourth_desc.transient is False:
-            print("[RemoveAccessNodeCopies] {} -> {} -> {} -> {}".format(first_node.data, second_node.data, third_node.data, fourth_node.data))
+        if (
+            first_desc.transient is False
+            and second_desc.transient is True
+            and third_desc.transient is True
+            and fourth_desc.transient is False
+        ):
+            print(
+                "[RemoveAccessNodeCopies] {} -> {} -> {} -> {}".format(
+                    first_node.data, second_node.data, third_node.data, fourth_node.data
+                )
+            )
         else:
             return False
 
         if first_node.data != fourth_node.data:
             return False
+
+        # Make sure that there is no other AccessNode with the same data in the SDFG state
+
+        # Make sure that the data written to the first node are not a subset of the data written to the fourth node
+
+        # Make sure that data written to second_node and third_node are not a superset of the data written to fourth_node
 
         first_edge = None
         first_node_out_edges = graph.out_edges(first_node)
@@ -94,8 +106,8 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
             if edge in second_node_in_edges:
                 first_edge = edge
                 break
-              
-        fourth_node_in_edges = graph.in_edges(fourth_node)
+
+        # fourth_node_in_edges = graph.in_edges(fourth_node)
 
         # for fourth_edge in fourth_node_in_edges:
         #     if gtx_dace_split.are_intersecting(first_edge.dst_subset, fourth_edge.src_subset):
@@ -116,13 +128,13 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         second_desc: dace_data.Data = second_node.desc(sdfg)
         third_node: dace_nodes.AccessNode = self.third_node
         third_desc: dace_data.Data = third_node.desc(sdfg)
-        fourth_node: dace_nodes.AccessNode = self.fourth_node
-        fourth_desc: dace_data.Data = fourth_node.desc(sdfg)
+        # fourth_node: dace_nodes.AccessNode = self.fourth_node
+        # fourth_desc: dace_data.Data = fourth_node.desc(sdfg)
 
-        scope = graph.scope_dict()
+        # scope = graph.scope_dict()
 
-        second_node_in_edges = graph.in_edges(second_node)
-        second_node_out_edges = graph.out_edges(second_node)
+        # second_node_in_edges = graph.in_edges(second_node)
+        # second_node_out_edges = graph.out_edges(second_node)
 
         first_node_shape = first_desc.shape
         second_node_shape = second_desc.shape
@@ -142,12 +154,12 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
                     for i, offset in enumerate(second_node_offset):
                         new_subset = []
                         if edge.data.dst_subset is not None:
-                            for j in range(len(edge.data.dst_subset[i])-1):
+                            for j in range(len(edge.data.dst_subset[i]) - 1):
                                 new_subset.append(edge.data.dst_subset[i][j] + offset)
                             new_subset.append(edge.data.dst_subset[i][-1])
                             edge.data.dst_subset[i] = tuple(new_subset)
                         else:
-                            for j in range(len(edge.data.src_subset[i])-1):
+                            for j in range(len(edge.data.src_subset[i]) - 1):
                                 new_subset.append(edge.data.src_subset[i][j] + offset)
                             new_subset.append(edge.data.src_subset[i][-1])
                             edge.data.src_subset[i] = tuple(new_subset)
@@ -157,82 +169,15 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
                     for i, offset in enumerate(third_node_offset):
                         new_subset = []
                         if edge.data.dst_subset is not None:
-                            for j in range(len(edge.data.dst_subset[i])-1):
+                            for j in range(len(edge.data.dst_subset[i]) - 1):
                                 new_subset.append(edge.data.dst_subset[i][j] + offset)
                             new_subset.append(edge.data.dst_subset[i][-1])
                             edge.data.dst_subset[i] = tuple(new_subset)
                         else:
-                            for j in range(len(edge.data.src_subset[i])-1):
+                            for j in range(len(edge.data.src_subset[i]) - 1):
                                 new_subset.append(edge.data.src_subset[i][j] + offset)
                             new_subset.append(edge.data.src_subset[i][-1])
                             edge.data.src_subset[i] = tuple(new_subset)
 
         second_node.data = first_node.data
         third_node.data = first_node.data
-
-        # sdfg.save('after_remove_access_node_copies.sdfg')
-
-        return
-
-        # import pdb; pdb.set_trace()
-        new_first_node = copy.deepcopy(first_node)
-        graph.add_node(new_first_node)
-
-        # Redirect all edges from second_node to new_first_node
-        for edge in list(graph.in_edges(second_node)):
-            # if edge.src != first_node:
-                # new_data = copy.deepcopy(edge.data)
-                # new_data.data = new_first_node.label
-            new_edge = helpers.redirect_edge(
-                graph, edge, new_dst=new_first_node, new_dst_conn=new_first_node.label #, new_data=edge.data.data
-            )
-
-        for edge in list(graph.out_edges(second_node)):
-            # if edge.dst == third_node:
-            # new_data = copy.deepcopy(edge.data)
-            # new_data.data = new_first_node.label
-            new_edge = helpers.redirect_edge(
-                graph, edge, new_src=new_first_node, new_src_conn=new_first_node.label #, new_data=new_first_node.label
-            )
-        sdfg.view()
-        import pdb; pdb.set_trace()
-        # if second_node.data in sdfg.arrays:
-        #     sdfg.arrays.pop(second_node.data)
-
-        new_first_node_2 = copy.deepcopy(first_node)
-        graph.add_node(new_first_node_2)
-        # Redirect all edges from third_node to new_first_node_2
-        for edge in list(graph.in_edges(third_node)):
-            # if edge.src == second_node:
-            # new_data = copy.deepcopy(edge.data)
-            # new_data.data = new_first_node_2.label
-            new_edge = helpers.redirect_edge(
-                graph, edge, new_dst=new_first_node_2, new_dst_conn=new_first_node_2.label, new_data=new_first_node.label
-            )
-                # if new_edge.data.data == second_node.data:
-                #     new_edge.data.data = new_first_node_2.data
-                #     new_edge.data.subset = copy.deepcopy(edge.data.subset)
-                # else:
-                #     new_edge.data.other_subset = copy.deepcopy(edge.data.subset)
-                # graph.remove_edge(edge)
-        for edge in list(graph.out_edges(third_node)):
-            # if edge.dst == fourth_node:
-            # new_data = copy.deepcopy(edge.data)
-            # new_data.data = new_first_node_2.label
-            new_edge = helpers.redirect_edge(
-                graph, edge, new_src=new_first_node_2, new_src_conn=new_first_node_2.label, new_data=new_first_node.label
-            )
-                # if new_edge.data.data == second_node.data:
-                #     new_edge.data.data = new_first_node_2.data
-                #     new_edge.data.subset = copy.deepcopy(edge.data.subset)
-                # else:
-                #     new_edge.data.other_subset = copy.deepcopy(edge.data.subset)
-                # graph.remove_edge(edge)
-        sdfg.remove_data(second_node.data, validate=False)
-        graph.remove_node(second_node)
-        sdfg.remove_data(third_node.data, validate=False)
-        # if third_node.data in sdfg.arrays:
-        #     sdfg.arrays.pop(third_node.data)
-        graph.remove_node(third_node)
-        sdfg.view()
-        import pdb; pdb.set_trace()
