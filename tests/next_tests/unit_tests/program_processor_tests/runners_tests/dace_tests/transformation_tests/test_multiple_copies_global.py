@@ -1,10 +1,16 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import copy
-import numpy as np
 import pytest
 
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
-from dace import subsets as dace_subsets
 
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
@@ -12,15 +18,16 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
+
 def test_complex_copies_global_access_node():
     N = 64
     K = 80
     sdfg = dace.SDFG(util.unique_name("complex_copies_global_access_node"))
-    A, _ = sdfg.add_array("A", [N, K+1], dtype=dace.float64)
-    B, _ = sdfg.add_array("B", [N, K+1], dtype=dace.float64)
+    A, _ = sdfg.add_array("A", [N, K + 1], dtype=dace.float64)
+    B, _ = sdfg.add_array("B", [N, K + 1], dtype=dace.float64)
     tmp0, _ = sdfg.add_temp_transient([N], dtype=dace.float64)
-    tmp1, _ = sdfg.add_temp_transient([N, K+1], dtype=dace.float64)
-    tmp2, _ = sdfg.add_temp_transient([N, K+1], dtype=dace.float64)
+    tmp1, _ = sdfg.add_temp_transient([N, K + 1], dtype=dace.float64)
+    tmp2, _ = sdfg.add_temp_transient([N, K + 1], dtype=dace.float64)
 
     st = sdfg.add_state()
     A_node = st.add_access(A)
@@ -30,7 +37,11 @@ def test_complex_copies_global_access_node():
     tmp1_node = st.add_access(tmp1)
     tmp2_node = st.add_access(tmp2)
 
-    st.add_nedge(tmp0_node, A_node, dace.Memlet(data=tmp0, subset=f"0:{N}", other_subset=f"0:{N}, {K}:{K+1}"))
+    st.add_nedge(
+        tmp0_node,
+        A_node,
+        dace.Memlet(data=tmp0, subset=f"0:{N}", other_subset=f"0:{N}, {K}:{K + 1}"),
+    )
 
     st.add_mapped_tasklet(
         "map1",
@@ -45,14 +56,30 @@ def test_complex_copies_global_access_node():
         external_edges=True,
     )
 
-    st.add_nedge(A_node, tmp1_node, dace.Memlet(data=A, subset=f"0:{N}, {K}:{K+1}", other_subset=f"0:{N}, {K}:{K+1}"))
-    st.add_nedge(tmp1_node, tmp2_node, dace.Memlet(data=tmp1, subset=f"0:{N}, 0:1", other_subset=f"0:{N}, 0:1"))
-    st.add_nedge(tmp1_node, tmp2_node, dace.Memlet(data=tmp1, subset=f"0:{N}, {K//2}:{K}", other_subset=f"0:{N}, {K//2}:{K}"))
-    st.add_nedge(tmp1_node, tmp2_node, dace.Memlet(data=tmp1, subset=f"0:{N}, {K}:{K+1}", other_subset=f"0:{N}, {K}:{K+1}"))
+    st.add_nedge(
+        A_node,
+        tmp1_node,
+        dace.Memlet(data=A, subset=f"0:{N}, {K}:{K + 1}", other_subset=f"0:{N}, {K}:{K + 1}"),
+    )
+    st.add_nedge(
+        tmp1_node,
+        tmp2_node,
+        dace.Memlet(data=tmp1, subset=f"0:{N}, 0:1", other_subset=f"0:{N}, 0:1"),
+    )
+    st.add_nedge(
+        tmp1_node,
+        tmp2_node,
+        dace.Memlet(data=tmp1, subset=f"0:{N}, {K // 2}:{K}", other_subset=f"0:{N}, {K // 2}:{K}"),
+    )
+    st.add_nedge(
+        tmp1_node,
+        tmp2_node,
+        dace.Memlet(data=tmp1, subset=f"0:{N}, {K}:{K + 1}", other_subset=f"0:{N}, {K}:{K + 1}"),
+    )
 
     st.add_mapped_tasklet(
         "map2",
-        map_ranges={"__i": f"0:{N}", "__j": f"1:{K//2}"},
+        map_ranges={"__i": f"0:{N}", "__j": f"1:{K // 2}"},
         code="__out = __inp + 0.5",
         inputs={
             "__inp": dace.Memlet(data=tmp1, subset="__i, __j"),
@@ -65,9 +92,21 @@ def test_complex_copies_global_access_node():
         external_edges=True,
     )
 
-    st.add_nedge(tmp2_node, A_node_copy, dace.Memlet(data=tmp2, subset=f"0:{N}, 0:1", other_subset=f"0:{N}, 0:1"))
-    st.add_nedge(tmp2_node, A_node_copy, dace.Memlet(data=tmp2, subset=f"0:{N}, 1:{K//2}", other_subset=f"0:{N}, 1:{K//2}"))
-    st.add_nedge(tmp2_node, A_node_copy, dace.Memlet(data=tmp2, subset=f"0:{N}, {K//2}:{K}", other_subset=f"0:{N}, {K//2}:{K}"))
+    st.add_nedge(
+        tmp2_node,
+        A_node_copy,
+        dace.Memlet(data=tmp2, subset=f"0:{N}, 0:1", other_subset=f"0:{N}, 0:1"),
+    )
+    st.add_nedge(
+        tmp2_node,
+        A_node_copy,
+        dace.Memlet(data=tmp2, subset=f"0:{N}, 1:{K // 2}", other_subset=f"0:{N}, 1:{K // 2}"),
+    )
+    st.add_nedge(
+        tmp2_node,
+        A_node_copy,
+        dace.Memlet(data=tmp2, subset=f"0:{N}, {K // 2}:{K}", other_subset=f"0:{N}, {K // 2}:{K}"),
+    )
 
     st.add_mapped_tasklet(
         "map3",
@@ -119,5 +158,3 @@ def test_complex_copies_global_access_node():
 
     reduced_edges = list(sdfg.all_edges_recursive())
     assert len(reduced_edges) == 12
-    sdfg.view()
-    breakpoint()
