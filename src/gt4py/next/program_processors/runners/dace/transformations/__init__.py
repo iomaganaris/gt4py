@@ -58,6 +58,7 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
+from .too_many_copies import RemoveAccessNodeCopies
 from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 
 
@@ -75,6 +76,7 @@ __all__ = [
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
+    "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
