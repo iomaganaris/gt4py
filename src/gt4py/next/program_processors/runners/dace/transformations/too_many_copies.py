@@ -25,10 +25,9 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 @dace_properties.make_properties
 class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
     """
-    Remove pointwise views from the SDFG.
-    This transformation is used to remove views that are created for pointwise operations.
-    It redirects the edges from the view to the original data and removes the view node.
-    The view generation is non-deterministic and usually happens after reduction `Library` nodes.
+    Replace temporary AccessNodes that are then copied to a global AccessNode
+    to avoid copies.
+    This pattern only exists in "vertically_implicit_solver" in ICON4Py dycore.
     """
 
     first_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -92,6 +91,10 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
 
         if first_node.data != fourth_node.data:
             print("[RemoveAccessNodeCopies] First and fourth node do not have the same data")
+            return False
+
+        if second_desc.shape != third_desc.shape:
+            print("[RemoveAccessNodeCopies] Second and third node do not have the same shape")
             return False
 
         # Make sure that second and fourth node have the same shape as the first node
@@ -186,53 +189,55 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
     ) -> None:
         first_node: dace_nodes.AccessNode = self.first_node
-        first_desc: dace_data.Data = first_node.desc(sdfg)
         second_node: dace_nodes.AccessNode = self.second_node
-        second_desc: dace_data.Data = second_node.desc(sdfg)
         third_node: dace_nodes.AccessNode = self.third_node
-        third_desc: dace_data.Data = third_node.desc(sdfg)
 
-        first_node_shape = first_desc.shape
-        second_node_shape = second_desc.shape
-        second_node_offset = tuple(0 for _ in range(len(second_node_shape)))
-        third_node_shape = third_desc.shape
-        third_node_offset = tuple(0 for _ in range(len(third_node_shape)))
+        edge_between_first_and_second = next(
+            edge for edge in graph.edges() if edge.src == first_node and edge.dst == second_node
+        )
 
-        if second_node_shape != first_node_shape:
-            second_node_offset = tuple(f - s for f, s in zip(first_node_shape, second_node_shape))
-        if third_node_shape != first_node_shape:
-            third_node_offset = tuple(f - s for f, s in zip(first_node_shape, third_node_shape))
-
+        node_offset = [
+            range_first[0] - range_second[0]
+            for range_first, range_second in zip(
+                edge_between_first_and_second.data.src_subset,
+                edge_between_first_and_second.data.dst_subset,
+            )
+        ]
         for edge in graph.edges():
             if edge.data.data == second_node.data:
                 edge.data.data = first_node.data
                 if edge.data.dst_subset != tuple([0]):
-                    for i, offset in enumerate(second_node_offset):
-                        new_subset = []
-                        if edge.data.dst_subset is not None:
-                            for j in range(len(edge.data.dst_subset[i]) - 1):
-                                new_subset.append(edge.data.dst_subset[i][j] + offset)
-                            new_subset.append(edge.data.dst_subset[i][-1])
+                    if edge.data.dst_subset is not None:
+                        for i, dst_subset_range in enumerate(edge.data.dst_subset):
+                            new_subset = []
+                            new_subset.append(dst_subset_range[0] + node_offset[i])
+                            new_subset.append(dst_subset_range[1] + node_offset[i])
+                            new_subset.append(dst_subset_range[2])
                             edge.data.dst_subset[i] = tuple(new_subset)
-                        else:
-                            for j in range(len(edge.data.src_subset[i]) - 1):
-                                new_subset.append(edge.data.src_subset[i][j] + offset)
-                            new_subset.append(edge.data.src_subset[i][-1])
+                    else:
+                        for i, src_subset_range in enumerate(edge.data.src_subset):
+                            new_subset = []
+                            new_subset.append(src_subset_range[0] + node_offset[i])
+                            new_subset.append(src_subset_range[1] + node_offset[i])
+                            new_subset.append(src_subset_range[2])
                             edge.data.src_subset[i] = tuple(new_subset)
+
             if edge.data.data == third_node.data:
                 edge.data.data = first_node.data
                 if edge.data.dst_subset != tuple([0]):
-                    for i, offset in enumerate(third_node_offset):
-                        new_subset = []
-                        if edge.data.dst_subset is not None:
-                            for j in range(len(edge.data.dst_subset[i]) - 1):
-                                new_subset.append(edge.data.dst_subset[i][j] + offset)
-                            new_subset.append(edge.data.dst_subset[i][-1])
+                    if edge.data.dst_subset is not None:
+                        for i, dst_subset_range in enumerate(edge.data.dst_subset):
+                            new_subset = []
+                            new_subset.append(dst_subset_range[0] + node_offset[i])
+                            new_subset.append(dst_subset_range[1] + node_offset[i])
+                            new_subset.append(dst_subset_range[2])
                             edge.data.dst_subset[i] = tuple(new_subset)
-                        else:
-                            for j in range(len(edge.data.src_subset[i]) - 1):
-                                new_subset.append(edge.data.src_subset[i][j] + offset)
-                            new_subset.append(edge.data.src_subset[i][-1])
+                    else:
+                        for i, src_subset_range in enumerate(edge.data.src_subset):
+                            new_subset = []
+                            new_subset.append(src_subset_range[0] + node_offset[i])
+                            new_subset.append(src_subset_range[1] + node_offset[i])
+                            new_subset.append(src_subset_range[2])
                             edge.data.src_subset[i] = tuple(new_subset)
 
         second_node.data = first_node.data
