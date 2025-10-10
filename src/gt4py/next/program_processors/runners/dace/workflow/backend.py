@@ -112,8 +112,6 @@ def make_dace_backend(
         auto_optimize=auto_optimize,
         cached=cached,
         otf_workflow__cached_translation=cached,
-        otf_workflow__bare_translation__gpu_block_size=(32, 8, 1),
-        otf_workflow__bare_translation__gpu_block_size_1d=(256, 1, 1),
         otf_workflow__bare_translation__blocking_dim=blocking_dim,
         otf_workflow__bare_translation__blocking_size=blocking_size,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
