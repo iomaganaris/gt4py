@@ -73,7 +73,9 @@ def serial_map_sdfg(N, extra_intermediate_edge=False):
     if extra_intermediate_edge:
         D_node = st.add_access(D)
         assert N >= 2
-        st.add_nedge(tmp_node, D_node, dace.Memlet(data=tmp, subset="N-2:N", other_subset="0:2"))
+        st.add_nedge(
+            tmp_node, D_node, dace.Memlet(data=tmp, subset=f"{N}-2:{N}", other_subset="0:2")
+        )
 
     sdfg.validate()
 
@@ -91,6 +93,8 @@ def test_vertical_map_fusion():
     ret = gtx_transformations.gt_vertical_map_split_fusion(
         sdfg=sdfg,
         run_simplify=True,
+        run_map_fusion=False,
+        fuse_map_fragments=True,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
@@ -99,9 +103,7 @@ def test_vertical_map_fusion():
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
 
-    # It will apply `VerticalSplitMapRange` on the first Map, then run
-    # `SplitAccessNode` and finally call MapFusion.
-    assert ret == 3
+    assert ret == 1
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
 
     assert len(sdfg.states()) == 1
@@ -120,7 +122,7 @@ def test_vertical_map_fusion():
 
 def test_vertical_map_fusion_disabled():
     N = 80
-    sdfg, A_node, B_node, C_node = serial_map_sdfg(N, extra_intermediate_edge=True)
+    sdfg, _, _, _ = serial_map_sdfg(N, extra_intermediate_edge=True)
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
 
     res, ref = util.make_sdfg_args(sdfg)
@@ -129,6 +131,8 @@ def test_vertical_map_fusion_disabled():
     ret = gtx_transformations.gt_vertical_map_split_fusion(
         sdfg=sdfg,
         run_simplify=True,
+        run_map_fusion=True,
+        fuse_map_fragments=True,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
@@ -143,7 +147,8 @@ def test_vertical_map_fusion_disabled():
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
 
 
-def test_vertical_map_fusion_with_neighbor_access():
+@pytest.mark.parametrize("run_map_fusion", [True, False])
+def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
     N = 80
     sdfg = dace.SDFG(util.unique_name("simple"))
     A, _ = sdfg.add_array("A", shape=(N,), dtype=dace.float64, strides=(1,))
@@ -243,7 +248,7 @@ def test_vertical_map_fusion_with_neighbor_access():
     red.add_out_connector("OUT_t")
     st.add_edge(b_out_node, None, red, "IN_b_out", dace.Memlet(data=b_out, subset="0:2"))
     st.add_edge(red, "OUT_t", t_node, None, dace.Memlet(data=t, subset="0"))
-    st.add_edge(t_node, None, mexit, "IN_B", dace.Memlet(data=t, subset="0"))
+    st.add_edge(t_node, None, mexit, "IN_B", dace.Memlet(data=B, subset="__i"))
     mnexit.add_in_connector("IN_b_out")
     mnexit.add_out_connector("OUT_b_out")
     mexit.add_in_connector("IN_B")
@@ -349,7 +354,8 @@ def test_vertical_map_fusion_with_neighbor_access():
     )
 
     sdfg.validate()
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 7
+    initial_map_entries_nb = util.count_nodes(sdfg, dace_nodes.MapEntry)
+    assert initial_map_entries_nb == 7
 
     res, ref = util.make_sdfg_args(sdfg)
     ref["gt_conn_E2C"] = np.random.randint(0, N, ref["gt_conn_E2C"].shape, dtype=np.int32)
@@ -359,6 +365,8 @@ def test_vertical_map_fusion_with_neighbor_access():
     ret = gtx_transformations.gt_vertical_map_split_fusion(
         sdfg=sdfg,
         run_simplify=True,
+        run_map_fusion=run_map_fusion,
+        fuse_map_fragments=True,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
@@ -367,9 +375,16 @@ def test_vertical_map_fusion_with_neighbor_access():
     util.compile_and_run_sdfg(sdfg, **res)
     # TODO(iomaganaris): Enable assertion for the result. Currently, the assertion fails on MacOS
     # with random neighbor indexes in E2C.
-    # assert util.compare_sdfg_res(ref=ref, res=res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
 
-    # `VerticalSplitMapRange` cannot be applied on the map that has neighbor access
-    # to the temporary field.
-    assert ret == 2
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 5
+    if run_map_fusion:
+        # Although no map could be split, map fusion was activated and was able to
+        #  fuse 3 Maps.
+        assert ret == 3
+        assert util.count_nodes(sdfg, dace_nodes.MapEntry) == initial_map_entries_nb - ret
+
+    else:
+        # `VerticalSplitMapRange` cannot be applied on the map that has neighbor access
+        # to the temporary field.
+        assert ret == 0
+        assert util.count_nodes(sdfg, dace_nodes.MapEntry) == initial_map_entries_nb
