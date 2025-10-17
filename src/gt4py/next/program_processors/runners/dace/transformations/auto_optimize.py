@@ -49,8 +49,8 @@ def gt_auto_optimize(
     gpu: bool,
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     make_persistent: bool = False,
-    gpu_block_size: Optional[Sequence[int | str] | str] = None,
-    gpu_block_size_1d: Optional[Sequence[int | str] | str] = None,
+    gpu_block_size: Optional[Sequence[int | str] | str] = (32, 8, 1),
+    gpu_block_size_1d: Optional[Sequence[int | str] | str] = (64, 1, 1),
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
     gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
@@ -154,9 +154,6 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
-    _default_gpu_block_size = (32, 8, 1)
-    _default_gpu_block_size_1d = (256, 1, 1)
-
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
@@ -224,14 +221,10 @@ def gt_auto_optimize(
         gpu_block_size_spec: dict[str, Sequence[int | str] | str] = {}
         if gpu_block_size_1d is not None:
             gpu_block_size_spec["block_size_1d"] = gpu_block_size_1d
-        else:
-            gpu_block_size_spec["block_size_1d"] = _default_gpu_block_size_1d
         if gpu_block_size_2d is not None:
             gpu_block_size_spec["block_size_2d"] = gpu_block_size_2d
         if gpu_block_size_3d is not None:
             gpu_block_size_spec["block_size_3d"] = gpu_block_size_3d
-        if gpu_block_size is None:
-            gpu_block_size = _default_gpu_block_size
 
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
