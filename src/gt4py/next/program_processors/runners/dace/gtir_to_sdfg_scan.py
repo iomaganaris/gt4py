@@ -92,7 +92,7 @@ def _create_scan_field_operator_impl(
     output_edge: gtir_dataflow.DataflowOutputEdge | None,
     output_domain: infer_domain.NonTupleDomainAccess,
     output_type: ts.FieldType,
-    map_exit: dace.nodes.MapExit,
+    map_exit: dace.nodes.MapExit | None,
 ) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -171,10 +171,19 @@ def _create_scan_field_operator_impl(
     field_node_path = ctx.state.memlet_path(next(iter(ctx.state.in_edges(field_node))))
     assert field_node_path[-1].dst is field_node
 
-    if inner_map_output_temporary_removed:
-        # The original output of the nested SDFG, the one that would be inside the Map,
-        #  has been deleted and the nested SDFG writes directly into the output.
-        #  In this case we have to adapt the stride of the array inside the nested SDFG.
+    if len(field_dims) == 1:
+        # The scan column corresponds to the full shape of the result field.
+        assert not inner_map_output_temporary_removed
+    else:
+        # The nested SDFG in the map scope produces the scan column for each point
+        # in the horizontal grid. We have to setup an edge from the nested SDFG
+        # through the MapExit node to write to the result field.
+        # The temporary node inside the map scope, which the nested SDFG was writing to,
+        # has been deleted, and the nested SDFG will write directly to the result
+        # field outside the map scope. Thus, we have to modify the stride of the
+        # scan column array inside the nested SDFG to match the strides outside.
+        assert inner_map_output_temporary_removed
+
         nsdfg_scan = field_node_path[0].src
         assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
         inner_output_name = field_node_path[0].src_conn
@@ -187,25 +196,6 @@ def _create_scan_field_operator_impl(
         inner_output_desc.set_shape(
             new_shape=inner_output_desc.shape, strides=(outside_output_stride,)
         )
-    else:
-        # The AccessNode on the inside of the Map was not removed but remains there.
-        #  Thus we do not have to update the strides, we do however, make some checks.
-        in_map_temporary_output_field = field_node_path[0].src
-        assert in_map_temporary_output_field == output_edge.result.dc_node
-
-        assert ctx.state.in_degree(in_map_temporary_output_field) == 1
-        assert ctx.state.out_degree(in_map_temporary_output_field) == 1
-        inner_edge = next(iter(ctx.state.in_edges(in_map_temporary_output_field)))
-        nsdfg_scan = inner_edge.src
-        assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
-
-        inner_output_name = inner_edge.src_conn
-        inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
-
-        assert len(inner_output_desc.shape) == 1
-        assert str(inner_output_desc.strides[0]).isdigit()
-        assert inner_output_desc.shape == dataflow_output_desc.shape
-        assert inner_output_desc.strides == dataflow_output_desc.strides
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)

@@ -276,35 +276,17 @@ class DataflowOutputEdge:
         `False` if kept.
         """
         write_edge = self.state.in_edges(self.result.dc_node)[0]
-        write_size = (
-            dace.symbolic.SymExpr(1)  # subset `None` not expected, but it can appear for scalars
-            if write_edge.data.dst_subset is None
-            else write_edge.data.dst_subset.num_elements()
-        )
+
         # check the kind of node which writes the result
         if isinstance(write_edge.src, dace.nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted
-            assert isinstance(write_size, int) or str(write_size).isdigit()
+            assert map_exit is not None
             remove_last_node = True
         elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
-            # TODO(phimuell, edopao): We need a better justification here, best would
-            #   be a reference to a DaCe/GT4Py issue on GH.
-            if isinstance(write_size, int) or str(write_size).isdigit():
-                # Temporary data with compile-time size is allocated on the stack
-                # and therefore is safe to keep. We decide to keep it as a workaround
-                # for a dace issue with memlet propagation in combination with
-                # nested SDFGs containing conditional blocks. The output memlet
-                # of such blocks will be marked as dynamic because dace is not able
-                # to detect the exact size of a conditional branch dataflow, even
-                # in case of if-else expressions with exact same output data.
-                remove_last_node = False
-            else:
-                # In case the output data has runtime size it is necessary to remove
-                # it in order to avoid dynamic memory allocation inside a parallel
-                # map scope. Otherwise, the memory allocation will for sure lead
-                # to performance degradation, and eventually illegal memory issues
-                # when the gpu runs out of local memory.
+            if map_exit is not None and write_edge.src.label.startswith("scan_"):
                 remove_last_node = True
+            else:
+                remove_last_node = False
         else:
             remove_last_node = False
 
