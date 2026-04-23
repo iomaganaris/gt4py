@@ -123,6 +123,8 @@ def gt_auto_optimize(
     blocking_only_if_independent_nodes: bool = True,
     promote_independent_memlets_for_blocking: bool = False,
     blocking_independent_node_threshold: Optional[int] = None,
+    blocking_gpu_block_size: Optional[Sequence[int] | tuple[int, ...]] = None,
+    blocking_gpu_maxnreg: Optional[int] = None,
     scan_loop_unrolling: bool = False,
     scan_loop_unrolling_factor: int = 0,
     disable_splitting: bool = False,
@@ -330,6 +332,8 @@ def gt_auto_optimize(
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
             promote_independent_memlets_for_blocking=promote_independent_memlets_for_blocking,
             blocking_independent_node_threshold=blocking_independent_node_threshold,
+            blocking_gpu_block_size=blocking_gpu_block_size,
+            blocking_gpu_maxnreg=blocking_gpu_maxnreg,
             scan_loop_unrolling=scan_loop_unrolling,
             scan_loop_unrolling_factor=scan_loop_unrolling_factor,
             fuse_tasklets=fuse_tasklets,
@@ -381,6 +385,8 @@ def gt_auto_optimize(
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_maxnreg=gpu_maxnreg,
+            blocking_gpu_block_size=blocking_gpu_block_size,
+            blocking_gpu_maxnreg=blocking_gpu_maxnreg,
             optimization_hooks=optimization_hooks,
             gpu_block_size_spec=gpu_block_size_spec if gpu_block_size_spec else None,
             validate_all=validate_all,
@@ -680,6 +686,8 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_only_if_independent_nodes: Optional[bool],
     promote_independent_memlets_for_blocking: Optional[bool],
     blocking_independent_node_threshold: Optional[int],
+    blocking_gpu_block_size: Optional[tuple[int, ...] | Sequence[int]],
+    blocking_gpu_maxnreg: Optional[int],
     scan_loop_unrolling: bool,
     scan_loop_unrolling_factor: int,
     fuse_tasklets: bool,
@@ -708,6 +716,8 @@ def _gt_auto_process_dataflow_inside_maps(
                 require_independent_nodes=blocking_only_if_independent_nodes,
                 promote_independent_memlets=promote_independent_memlets_for_blocking,
                 independent_node_threshold=blocking_independent_node_threshold,
+                gpu_block_size=blocking_gpu_block_size,
+                gpu_maxnreg=blocking_gpu_maxnreg,
             ),
             validate=False,
             validate_all=validate_all,
@@ -821,6 +831,8 @@ def _gt_auto_configure_maps_and_strides(
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
     gpu_maxnreg: Optional[int],
+    blocking_gpu_block_size: Optional[tuple[int, ...] | Sequence[int]],
+    blocking_gpu_maxnreg: Optional[int],
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]],
     validate_all: bool,
@@ -902,6 +914,24 @@ def _gt_auto_configure_maps_and_strides(
             validate_all=validate_all,
             try_removing_trivial_maps=True,
         )
+
+        # Override GPU block size for loop-blocked maps. The GPU transformation
+        # above resets block sizes set by LoopBlocking, so we re-apply them here
+        # by finding top-level maps that contain the coarse blocking variable.
+        if blocking_gpu_block_size is not None or blocking_gpu_maxnreg is not None:
+            for state in sdfg.states():
+                scope_dict = state.scope_dict()
+                for node in state.nodes():
+                    if not isinstance(node, dace.nodes.MapEntry):
+                        continue
+                    if scope_dict[node] is not None:
+                        continue
+                    if any(p.startswith("__gtx_coarse_") for p in node.map.params):
+                        if blocking_gpu_block_size is not None:
+                            node.map.gpu_block_size = tuple(blocking_gpu_block_size)
+                        if blocking_gpu_maxnreg is not None:
+                            node.map.gpu_maxnreg = blocking_gpu_maxnreg
+
         if GT4PyAutoOptHook.AfterToGPU in optimization_hooks:
             optimization_hooks[GT4PyAutoOptHook.AfterToGPU](sdfg)  # type: ignore[call-arg]
 

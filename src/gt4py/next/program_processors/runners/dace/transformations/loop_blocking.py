@@ -86,6 +86,25 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         default=0,
         desc="Minimum number of independent nodes required to apply blocking (non-inclusive).",
     )
+    gpu_block_size = dace_properties.Property(
+        dtype=tuple,
+        default=None,
+        allow_none=True,
+        desc="GPU thread block size for the outer (coarse) map after blocking. "
+        "None = use the default picked by subsequent GPU transformations. "
+        "On AMD MI300A/gfx942, (256,1,1) is preferred (all threads on the Cell "
+        "axis maximizes coalescing). On NVIDIA SM90, smaller blocks such as "
+        "(64,1,1) or (128,1,1) typically work well.",
+    )
+    gpu_maxnreg = dace_properties.Property(
+        dtype=int,
+        default=None,
+        allow_none=True,
+        desc="Maximum registers per thread for the outer map. None = compiler default. "
+        "On NVIDIA, constraining registers can force higher occupancy. "
+        "On AMD/gfx942, leave as None — register limiting causes register spilling "
+        "because occupancy is already maxed at 8 waves/SIMD.",
+    )
 
     # Set of nodes that are independent of the blocking parameter.
     _independent_nodes: Optional[set[dace_nodes.AccessNode]]
@@ -101,6 +120,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         require_independent_nodes: Optional[bool] = None,
         promote_independent_memlets: Optional[bool] = None,
         independent_node_threshold: Optional[int] = None,
+        gpu_block_size: Optional[tuple[int, ...]] = None,
+        gpu_maxnreg: Optional[int] = None,
     ) -> None:
         super().__init__()
         if isinstance(blocking_parameter, gtx_common.Dimension):
@@ -115,6 +136,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             self.promote_independent_memlets = promote_independent_memlets
         if independent_node_threshold is not None:
             self.independent_node_threshold = independent_node_threshold
+        if gpu_block_size is not None:
+            self.gpu_block_size = gpu_block_size
+        if gpu_maxnreg is not None:
+            self.gpu_maxnreg = gpu_maxnreg
         self._independent_nodes = None
         self._dependent_nodes = None
         self._memlet_to_promote = None
@@ -235,6 +260,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         self._independent_nodes = None
         self._dependent_nodes = None
         self._memlet_to_promote = None
+        if self.gpu_block_size is not None:
+            outer_entry.map.gpu_block_size = tuple(self.gpu_block_size)
+        if self.gpu_maxnreg is not None:
+            outer_entry.map.gpu_maxnreg = self.gpu_maxnreg
 
     def _prepare_inner_outer_maps(
         self,
