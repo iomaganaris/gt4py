@@ -18,7 +18,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
@@ -344,10 +344,13 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        definitions.CompilableProgramDef,
-        stages.ProgramSource[code_specs.SDFGCodeSpec],
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     ],
-    definitions.TranslationStep[code_specs.SDFGCodeSpec],
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
+    ],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
@@ -410,7 +413,7 @@ class DaCeTranslator(
                 use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
             )
 
-        sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
+        sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir,
@@ -464,8 +467,8 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[code_specs.SDFGCodeSpec]:
+        self, inp: stages.CompilableProgramDef
+    ) -> artifacts.ProgramSource[artifacts.SDFGCodeSpec]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -483,11 +486,11 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
+        module: artifacts.ProgramSource[artifacts.SDFGCodeSpec] = artifacts.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
             source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
             library_deps=tuple(),
-            code_spec=code_specs.SDFGCodeSpec(),
+            code_spec=artifacts.SDFGCodeSpec(),
         )
         return module
 
