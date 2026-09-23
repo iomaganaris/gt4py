@@ -661,6 +661,7 @@ def _gt_auto_process_top_level_maps(
                 check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
                     GT4PyAutoOptHook.TopLevelDataFlowMapFusionVerticalCallBack, None
                 ),
+                allow_shared_data=True,  # To allow fusion of Maps that share data access.
                 validate=False,
                 validate_all=validate_all,
             )
